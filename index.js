@@ -79,24 +79,32 @@ async function run() {
 
       //update
 
-     app.put('/tasks/:id', async (req, res) => {
-  const id = req.params.id;
-  const { title, description, category } = req.body;
-
-  try {
-    const result = await TaskCollection.updateOne(
-      { _id: new ObjectId(id) },
-      { $set: { title, description, category } }
-    );
-    if (result.matchedCount > 0) {
-      res.status(200).send({ message: 'Task updated successfully' });
-    } else {
-      res.status(404).send({ message: 'Task not found' });
-    }
-  } catch (error) {
-    res.status(500).send({ message: 'Error updating task' });
-  }
-});
+      app.put('/tasks/:id', async (req, res) => {
+        const id = req.params.id;
+        const updateData = req.body;
+      
+        try {
+          const result = await TaskCollection.updateOne(
+            { _id: new ObjectId(id) },
+            { $set: { 
+              title: updateData.title,
+              description: updateData.description,
+              category: updateData.category,
+              updatedAt: new Date() 
+            }}
+          );
+      
+          if (result.matchedCount === 0) {
+            return res.status(404).json({ message: 'Task not found' });
+          }
+      
+          const updatedTask = await TaskCollection.findOne({ _id: new ObjectId(id) });
+          res.status(200).json(updatedTask);
+        } catch (error) {
+          console.error('Update error:', error);
+          res.status(500).json({ message: 'Server error updating task' });
+        }
+      });
 
 
 
