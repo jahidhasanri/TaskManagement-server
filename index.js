@@ -9,7 +9,6 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 5000;
 
-// MongoDB Connection
 const uri = `mongodb+srv://${process.env.BD_USER}:${process.env.BD_PASS}@cluster0.e8jg2.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
 const client = new MongoClient(uri, {
@@ -22,105 +21,87 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-    await client.connect();
-    console.log("Connected to MongoDB!");
 
     const UserCollection = client.db("tastManagement").collection("users");
     const TaskCollection = client.db("tastManagement").collection("tasks");
 
-    // User Insert or Find API
+    // User API endpoints
     app.post('/users/:email', async (req, res) => {
-        const email = req.params.email;
-        const query = { email };
-        const user = req.body;
-        console.log(user);
-        try {
-          // Check if user already exists
-          const isExist = await UserCollection.findOne(query);
-          if (isExist) {
-            return res.status(200).json(isExist); // User already exists
-          }
-
-          // Insert new user
-          const result = await UserCollection.insertOne({
-            name: user.name || "Unknown",
-            image: user.image || "default.png",
-            email: user.email,
-           
-          });
-
-          res.status(201).json(result); // Successfully added new user
-
-        } catch (error) {
-          console.error("MongoDB Error:", error);
-          res.status(500).json({ message: "Internal Server Error" });
-        }
+      const email = req.params.email;
+      const user = req.body;
+      try {
+        const isExist = await UserCollection.findOne({ email });
+        if (isExist) return res.send(isExist);
+        
+        const result = await UserCollection.insertOne({
+          name: user.name || "Unknown",
+          image: user.image || "default.png",
+          email: user.email,
+        });
+        res.status(201).send(result);
+      } catch (error) {
+        console.error("Error:", error);
+        res.status(500).send({ message: "Server error" });
+      }
     });
-    // add task
-    app.post('/tasks',async (req,res)=>{
-        const data= req.body
-        console.log(data);
-        const result = TaskCollection.insertOne(data)
-        res.send(result)
-    })
 
-    app.get('/tasks',async(req,res)=>{
-        const result = await TaskCollection.find().toArray();
-        res.send(result)
-      })
+    // Task API endpoints
+    app.post('/tasks', async (req, res) => {
+      try {
+        const result = await TaskCollection.insertOne(req.body);
+        res.status(201).send(result);
+      } catch (error) {
+        res.status(500).send({ message: "Error creating task" });
+      }
+    });
 
-    //   delete task
-    app.delete('/tasks/:id',async(req,res)=>{
-        const id = req.params.id;
-        const query = {_id: new ObjectId(id)}
-        const result = await TaskCollection.deleteOne(query);
-        res.send(result)
-      })
+    app.get('/tasks', async (req, res) => {
+      try {
+        const tasks = await TaskCollection.find().toArray();
+        res.send(tasks);
+      } catch (error) {
+        res.status(500).send({ message: "Error fetching tasks" });
+      }
+    });
 
-      //update
+    app.delete('/tasks/:id', async (req, res) => {
+      try {
+        const result = await TaskCollection.deleteOne({ _id: new ObjectId(req.params.id) });
+        if (result.deletedCount === 0) return res.status(404).send({ message: "Task not found" });
+        res.send({ message: "Task deleted successfully" });
+      } catch (error) {
+        res.status(500).send({ message: "Error deleting task" });
+      }
+    });
 
-      app.put('/tasks/:id', async (req, res) => {
-        const id = req.params.id;
+    app.put('/tasks/:id', async (req, res) => {
+      try {
         const updateData = req.body;
-      
-        try {
-          const result = await TaskCollection.updateOne(
-            { _id: new ObjectId(id) },
-            { $set: { 
-              title: updateData.title,
-              description: updateData.description,
-              category: updateData.category,
-              updatedAt: new Date() 
-            }}
-          );
-      
-          if (result.matchedCount === 0) {
-            return res.status(404).json({ message: 'Task not found' });
-          }
-      
-          const updatedTask = await TaskCollection.findOne({ _id: new ObjectId(id) });
-          res.status(200).json(updatedTask);
-        } catch (error) {
-          console.error('Update error:', error);
-          res.status(500).json({ message: 'Server error updating task' });
-        }
-      });
+        const result = await TaskCollection.updateOne(
+          { _id: new ObjectId(req.params.id) },
+          { $set: updateData }
+        );
+        if (result.matchedCount === 0) return res.status(404).send({ message: "Task not found" });
+        
+        const updatedTask = await TaskCollection.findOne({ _id: new ObjectId(req.params.id) });
+        res.send(updatedTask);
+      } catch (error) {
+        res.status(500).send({ message: "Error updating task" });
+      }
+    });
 
-
-
-  } catch (error) {
-    console.error("MongoDB Connection Error:", error);
+  } finally {
+    // Ensures that the client will close when you finish/error
+    // await client.close();
   }
 }
 
 run().catch(console.dir);
 
-// Default Route
 app.get('/', (req, res) => {
-  res.send('Hello, World!');
+  res.send('Task Management Server Running');
 });
 
-// Start Server
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
